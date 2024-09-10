@@ -1,4 +1,13 @@
 <?php
+require 'vendor/autoload.php'; // Guzzleを読み込む
+
+use GuzzleHttp\Client;
+
+$client = new Client();
+
+// OpenAI APIキーの設定
+$openai_api_key = 'YOUR_OPENAI_API_KEY';
+
 // 質問リスト
 $questions = [
     "人と話すことが好きですか？",
@@ -20,34 +29,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $responses[] = $_POST["q$index"];
     }
 
-    // 結果解析
-    $strong_interests = [];
-    $low_interests = [];
-    foreach ($responses as $index => $response) {
-        if ($response === 'やりたい') {
-            $strong_interests[] = $questions[$index];
-        } elseif ($response === 'やりたくない') {
-            $low_interests[] = $questions[$index];
-        }
+    // 回答データを基に診断プロンプトを生成
+    $prompt = "以下は職業に関する質問とユーザーの回答です。これに基づいてユーザーの職業興味診断を行ってください。\n\n";
+    foreach ($questions as $index => $question) {
+        $prompt .= $question . ": " . $responses[$index] . "\n";
     }
 
-    // 結果の表示
+    // OpenAI APIへのリクエスト
+    $response = $client->post('https://api.openai.com/v1/completions', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $openai_api_key,
+            'Content-Type'  => 'application/json',
+        ],
+        'json' => [
+            'model' => 'gpt-4o mini',
+            'prompt' => $prompt,
+            'max_tokens' => 150,
+        ]
+    ]);
+
+    $result = json_decode($response->getBody(), true);
+    $advice = $result['choices'][0]['text'];
+
+    // 結果を表示
     echo "<h1>あなたに合う職業の提案</h1>";
-    if (count($strong_interests) > 0) {
-        echo "<h2>興味が強い分野:</h2><ul>";
-        foreach ($strong_interests as $interest) {
-            echo "<li>$interest</li>";
-        }
-        echo "</ul>";
-    }
-    if (count($low_interests) > 0) {
-        echo "<h2>興味が低い分野:</h2><ul>";
-        foreach ($low_interests as $interest) {
-            echo "<li>$interest</li>";
-        }
-        echo "</ul>";
-    }
-
+    echo "<p>$advice</p>";
     echo '<a href="index.php">もう一度</a>';
     exit();
 }
